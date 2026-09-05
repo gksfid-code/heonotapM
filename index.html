@@ -157,16 +157,21 @@ async function createRoom(code, room){
 let lastUpdateError = null;
 async function updateRoom(code, mutator){
   if(!firebaseReady){ lastUpdateError = 'Firebase가 초기화되지 않았습니다.'; return null; }
-  try{
-    const res = await db.ref('rooms/'+code).transaction(current => mutator(current || null));
-    if(res.committed){ lastUpdateError = null; return res.snapshot.val(); }
-    lastUpdateError = '트랜잭션이 커밋되지 않았습니다 (committed=false).';
-    return null;
-  }catch(e){
-    console.error(e);
-    lastUpdateError = (e && e.message) ? e.message : String(e);
-    return null;
+  for(let i=0;i<3;i++){
+    try{
+      const snap = await db.ref('rooms/'+code).once('value');
+      const cur = snap.exists() ? snap.val() : null;
+      const next = mutator(cur);
+      if(next === undefined) return cur;
+      await db.ref('rooms/'+code).set(next);
+      lastUpdateError = null;
+      return next;
+    }catch(e){
+      console.error(e);
+      lastUpdateError = (e && e.message) ? e.message : String(e);
+    }
   }
+  return null;
 }
 let unsubscribeFn = null;
 function subscribeRoom(code){
