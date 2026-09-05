@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>헌터는 오늘도 마피아 게임을 합니다</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+  :root{ --radius: 14px; }
+  body.theme-light{
+    --bg:#FFFFFF; --bg-elev:#F1F5FA; --bg-card:#FFFFFF; --bg-card-alt:#EAF1F9; --line:#DCE6F0;
+    --text:#10202E; --text-dim:#52697E; --text-faint:#8CA0B3;
+    --accent:#0B5394; --accent-text:#FFFFFF;
+    --mafia:#C23A52; --mafia-dim:#FBE4E8;
+    --citizen:#1F8F80; --citizen-dim:#E1F5F1;
+    --neutral:#A9750B; --neutral-dim:#FBF0D9;
+  }
+  body.theme-dark{
+    --bg:#081019; --bg-elev:#0F1A26; --bg-card:#12202E; --bg-card-alt:#17293A; --line:#223244;
+    --text:#EAF2FA; --text-dim:#93A9BC; --text-faint:#5E7387;
+    --accent:#2E7FC1; --accent-text:#FFFFFF;
+    --mafia:#D6455B; --mafia-dim:#4A2530;
+    --citizen:#3FB6A8; --citizen-dim:#1F3F3B;
+    --neutral:#E0A73C; --neutral-dim:#4A3C1C;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;transition:background-color .5s ease, color .5s ease;}
+  #app{max-width:460px;margin:0 auto;min-height:100vh;padding:20px 16px 48px;}
+  h1,h2,h3{font-family:'Chivo','Noto Sans KR',sans-serif;letter-spacing:0.01em;margin:0 0 4px;}
+  .brand{font-family:'Chivo',sans-serif;font-weight:900;font-size:28px;letter-spacing:0.02em;color:var(--text);}
+  .brand small{display:block;font-family:'Noto Sans KR';font-weight:400;font-size:13px;color:var(--text-dim);margin-top:2px;letter-spacing:0;}
+  .sub{color:var(--text-dim);font-size:14px;line-height:1.5;margin-bottom:20px;}
+  .card{background:var(--bg-card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px;transition:background-color .4s ease, border-color .4s ease;}
+  .card-alt{background:var(--bg-card-alt);}
+  .stack{display:flex;flex-direction:column;gap:10px;}
+  .row{display:flex;gap:8px;align-items:center;}
+  .row-between{display:flex;justify-content:space-between;align-items:center;}
+  input, select, textarea{
+    width:100%;background:var(--bg-elev);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:12px 14px;font-size:15px;font-family:inherit;outline:none;
+  }
+  input:focus, select:focus, textarea:focus{border-color:var(--accent);}
+  textarea{resize:vertical;min-height:56px;}
+  label{font-size:12.5px;color:var(--text-dim);margin-bottom:4px;display:block;}
+  button{
+    font-family:inherit;font-size:15px;font-weight:700;border:none;border-radius:10px;
+    padding:13px 16px;cursor:pointer;transition:transform .08s ease, opacity .15s ease;
+  }
+  button:active{transform:scale(0.97);}
+  button:disabled{opacity:0.4;cursor:not-allowed;}
+  .btn-primary{background:var(--accent);color:var(--accent-text);}
+  .btn-secondary{background:var(--bg-card-alt);color:var(--text);border:1px solid var(--line);}
+  .btn-danger{background:var(--mafia);color:#fff;}
+  .btn-ghost{background:transparent;color:var(--text-dim);border:1px solid var(--line);}
+  .btn-block{width:100%;}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--bg-elev);border:1px solid var(--line);
+    border-radius:999px;padding:6px 12px;font-size:13px;color:var(--text);}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:0.02em;}
+  .badge-mafia{background:var(--mafia-dim);color:var(--mafia);}
+  .badge-citizen{background:var(--citizen-dim);color:var(--citizen);}
+  .badge-neutral{background:var(--neutral-dim);color:var(--neutral);}
+  .code-display{font-family:'Chivo',sans-serif;font-size:38px;font-weight:900;letter-spacing:0.12em;color:var(--accent);text-align:center;padding:14px 0;}
+  .divider{height:1px;background:var(--line);margin:16px 0;}
+  .muted{color:var(--text-dim);font-size:13.5px;}
+  .faint{color:var(--text-faint);font-size:12px;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px;}
+  .topbar .meta{font-size:12.5px;color:var(--text-dim);}
+  .phase-tag{font-family:'Chivo',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.05em;padding:5px 12px;border-radius:8px;background:var(--accent);color:var(--accent-text);}
+  .player-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);}
+  .player-row:last-child{border-bottom:none;}
+  .dead{opacity:0.4;text-decoration:line-through;}
+  .log-item{font-size:13.5px;color:var(--text-dim);padding:6px 0;border-bottom:1px dashed var(--line);}
+  .log-item:last-child{border-bottom:none;}
+  .role-reveal{background:var(--bg-elev);border:1px solid var(--accent);border-radius:12px;padding:16px;text-align:center;margin-bottom:14px;}
+  .role-reveal .name{font-family:'Chivo',sans-serif;font-size:24px;font-weight:900;margin:6px 0;}
+  .tally-bar{background:var(--bg-elev);border-radius:8px;overflow:hidden;height:8px;margin-top:6px;}
+  .tally-fill{height:100%;background:var(--accent);}
+  .link-btn{background:none;border:none;color:var(--accent);font-size:13.5px;font-weight:700;cursor:pointer;padding:4px 0;text-align:left;}
+  .notice{background:var(--bg-card-alt);border-left:3px solid var(--accent);padding:10px 12px;border-radius:6px;font-size:13px;color:var(--text-dim);margin-bottom:14px;}
+</style>
+</head>
+<body class="theme-light">
+<div id="app">불러오는 중…</div>
+<script>
+(function(){
+
+
+// ---------- utils ----------
+function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : 'id-'+Math.random().toString(36).slice(2)+Date.now()); }
+function genCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
+function esc(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function shuffle(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+const DEFAULT_CITIZEN_ID = '__default_citizen__';
+
+function roleById(room, roleId){
+  if(roleId === DEFAULT_CITIZEN_ID) return {id:DEFAULT_CITIZEN_ID, name:'시민', team:'citizen', ability:''};
+  return (room.roles||[]).find(r=>r.id===roleId) || null;
+}
+function teamBadgeClass(team){
+  if(team==='mafia') return 'badge-mafia';
+  if(team==='neutral') return 'badge-neutral';
+  return 'badge-citizen';
+}
+function teamLabel(team){
+  if(team==='mafia') return '마피아팀';
+  if(team==='neutral') return '중립';
+  return '시민팀';
+}
+const TAGLINE = '헌터는 오늘도 마피아 게임을 합니다';
+
+// ============ Firebase 설정 : 아래 값을 본인의 Firebase 프로젝트 값으로 바꿔주세요 ============
+const FIREBASE_CONFIG = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+// ===============================================================================
+let db = null;
+let firebaseReady = false;
+try{
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.database();
+  firebaseReady = FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
+}catch(e){ console.error(e); firebaseReady = false; }
+
+// ---------- Firebase Realtime Database data layer ----------
+async function fetchRoomOnce(code){
+  if(!firebaseReady) return null;
+  try{
+    const snap = await db.ref('rooms/'+code).once('value');
+    return snap.exists() ? snap.val() : null;
+  }catch(e){ console.error(e); return null; }
+}
+async function createRoom(code, room){
+  if(!firebaseReady){
+    return {ok:false, error:'Firebase 설정이 비어있습니다. 파일 상단의 FIREBASE_CONFIG를 채워주세요.'};
+  }
+  try{
+    await db.ref('rooms/'+code).set(room);
+    return {ok:true};
+  }catch(e){
+    console.error(e);
+    return {ok:false, error: (e && e.message) ? e.message : String(e)};
+  }
+}
+// mutator(current) must return the new room object, or `undefined` to abort the write
+async function updateRoom(code, mutator){
+  if(!firebaseReady) return null;
+  try{
+    const res = await db.ref('rooms/'+code).transaction(current => mutator(current || null));
+    if(res.committed) return res.snapshot.val();
+    return null;
+  }catch(e){ console.error(e); return null; }
+}
+let unsubscribeFn = null;
+function subscribeRoom(code){
+  unsubscribe();
+  const ref = db.ref('rooms/'+code);
+  const handler = snap=>{
+    const val = snap.val();
+    if(val){ state.room = val; render(); }
+  };
+  ref.on('value', handler);
+  unsubscribeFn = ()=>ref.off('value', handler);
+}
+function unsubscribe(){ if(unsubscribeFn){ unsubscribeFn(); unsubscribeFn=null; } }
+
+let state = {
+  screen: 'home', roomCode: null, myId: null, myNickname: null, room: null, err: null, showHostPanel: false,
+};
+
+function isHost(){ return state.room && state.room.hostId === state.myId; }
+function me(){ return state.room && (state.room.players||[]).find(p=>p.id===state.myId); }
+function alivePlayers(excludeSelf){
+  if(!state.room) return [];
+  return (state.room.players||[]).filter(p=>p.alive && (!excludeSelf || p.id!==state.myId));
+}
+function applyTheme(){
+  const phase = state.room ? state.room.phase : null;
+  const dark = phase === 'night';
+  document.body.classList.toggle('theme-dark', dark);
+  document.body.classList.toggle('theme-light', !dark);
+}
+
+// ---------- actions ----------
+window.goHome = function(){
+  unsubscribe();
+  state = {screen:'home', roomCode:null, myId:null, myNickname:null, room:null, err:null, showHostPanel:false};
+  render();
+};
+window.goCreate = function(){ state.screen='createName'; state.err=null; render(); };
+window.goJoin = function(){ state.screen='joinForm'; state.err=null; render(); };
+
+window.submitCreate = async function(){
+  const nick = document.getElementById('inp-nick').value.trim();
+  if(!nick){ state.err='닉네임을 입력해주세요.'; render(); return; }
+  const code = genCode();
+  const myId = uid();
+  const room = {
+    code, hostId: myId, phase: 'setup', dayNumber: 1,
+    roles: [
+      {id:'role-mafia', name:'마피아', team:'mafia', ability:'밤마다 한 명을 지목해 제거합니다', count:1},
+      {id:'role-doctor', name:'의사', team:'citizen', ability:'밤마다 한 명을 지목해 치료합니다', count:1},
+      {id:'role-police', name:'경찰', team:'citizen', ability:'밤마다 한 명을 지목해 정체(마피아 여부)를 확인합니다', count:1},
+      {id:'role-citizen', name:'시민', team:'citizen', ability:'', count:1}
+    ],
+    players: [{id:myId, nickname:nick, alive:true, roleId:null, isHost:true}],
+    nightSubmissions: {}, votes: {}, log: [], chat: [], winnerText: ''
+  };
+  const result = await createRoom(code, room);
+  if(!result.ok){ state.err='방 생성 실패: ' + result.error; render(); return; }
+  state.roomCode = code; state.myId = myId; state.myNickname = nick; state.room = room;
+  state.screen = 'roleSetup';
+  subscribeRoom(code);
+  render();
+};
+
+window.submitJoin = async function(){
+  const nick = document.getElementById('inp-join-nick').value.trim();
+  const codeRaw = document.getElementById('inp-join-code').value.trim();
+  const code = codeRaw.toUpperCase();
+  if(!nick || !code){ state.err='닉네임과 참가코드를 모두 입력해주세요.'; render(); return; }
+  const existing = await fetchRoomOnce(code);
+  if(!existing){ state.err='해당 코드의 방을 찾을 수 없어요.'; render(); return; }
+  if(existing.phase !== 'setup' && existing.phase !== 'lobby'){ state.err='이미 게임이 시작된 방이에요.'; render(); return; }
+  const myId = uid();
+  const updated = await updateRoom(code, (r)=>{
+    if(!r) return undefined;
+    r.players = r.players || [];
+    r.players.push({id:myId, nickname:nick, alive:true, roleId:null, isHost:false});
+    return r;
+  });
+  if(!updated){ state.err='참가에 실패했어요. 다시 시도해주세요.'; render(); return; }
+  state.roomCode = code; state.myId = myId; state.myNickname = nick; state.room = updated;
+  state.screen = 'room';
+  subscribeRoom(code);
+  render();
+};
+
+window.updateRoleCount = async function(roleId, rawCount){
+  let count = parseInt(rawCount, 10);
+  if(isNaN(count) || count < 0) count = 0;
+  const updated = await updateRoom(state.roomCode, (r)=>{
+    if(!r) return undefined;
+    r.roles = (r.roles||[]).map(x=> x.id===roleId ? {...x, count} : x);
+    return r;
+  });
+  if(updated){ state.room = updated; render(); }
+};
+
+window.goLobby = async function(){
+  const updated = await updateRoom(state.roomCode, (r)=>{ if(!r) return undefined; r.phase='lobby'; return r; });
+  if(updated){ state.room = updated; state.screen='room'; render(); }
+};
+window.goRoleEditFromLobby = function(){ state.screen='roleSetup'; render(); };
+
+window.startGame = async function(){
+  const updated = await updateRoom(state.roomCode, (r)=>{
+    if(!r) return undefined;
+    const players = r.players || [];
+    let pool = [];
+    (r.roles||[]).forEach(role=>{ for(let i=0;i<role.count;i++) pool.push(role.id); });
+    pool = shuffle(pool);
+    if(pool.length < players.length){ while(pool.length < players.length) pool.push(DEFAULT_CITIZEN_ID); }
+    else if(pool.length > players.length){ pool = pool.slice(0, players.length); }
+    const shuffledPool = shuffle(pool);
+    r.players = players.map((p,i)=>({...p, roleId: shuffledPool[i], alive:true}));
+    r.phase = 'night'; r.dayNumber = 1; r.nightSubmissions = {}; r.votes = {};
+    r.log = [{text:'게임이 시작되었습니다. 첫 번째 밤이 찾아옵니다.'}];
+    return r;
+  });
+  if(updated){ state.room = updated; render(); }
+};
+
+window.submitNightAction = async function(){
+  const target = document.getElementById('night-target').value;
+  const noteEl = document.getElementById('night-note');
+  const note = noteEl ? noteEl.value.trim() : '';
+  const updated = await updateRoom(state.roomCode, (r)=>{
+    if(!r) return undefined;
+    r.nightSubmissions = r.nightSubmissions || {};
+    r.nightSubmissions[state.myId] = {targetId: target, note, ts: Date.now()};
+    return r;
+  });
+  if(updated){ state.room = updated; render(); }
+};
+
+window.toggleHostPanel = function(){ state.showHostPanel = !state.showHostPanel; render(); };
+
+window.eliminateAndGoDay = async function(){
+  const checked = Array.from(document.querySelectorAll('.night-elim-check:checked')).map(el=>el.value);
+  const noteEl = document.getElementById('host-day-note');
+  const note = noteEl ? noteEl.value.trim() : '';
+  const updated = await updateRoom(state.roomCode, (r)=>{
+    if(!r) return undefined;
+    r.players = (r.players||[]).map(p=> checked.includes(p.id) ? {...p, alive:false} : p);
+    const names = checked.map(id=>{ const p=(r.players||[]).find(pp=>pp.id===id); return p? p.nickname : ''; }).filter(Boolean);
+    let text = names.length ? (names.join(', ') + '님이 밤사이 목숨을 잃었습니다.') : '밤사이 아무도 목숨을 잃지 않았습니다.';
+    if(note) text += ' — ' + note;
+    r.log = [{text}, ...(r.log||[])];
+    r.phase = 'day'; r.nightSubmissions = {}; r.chat = [];
+    return r;
+  });
+  if(updated){ state.room = updated; state.showHostPanel=false; render(); }
+};
+
+window.sendChatMessage = async function(){
+  const el = document.getElementById('chat-input');
+  const text = el ? el.value.trim() : '';
+  if(!text) return;
+  const updated = await updateRoom(state.roomCode, (r)=>{
+    if(!r) return undefined;
+    r.chat = r.chat || [];
+    r.chat.push({nickname: state.myNickname, text, ts: Date.now()});
+    if(r.chat.length > 200) r.chat = r.chat.slice(-200);
+    return r;
+  });
+  if(updated){ state.room = updated; render(); }
+};
+
+window.startVote = async function(){
+  const updated = await updateRoom(state.roomCode, (r)=>{ if(!r) return undefined; r.phase='vote'; r.votes={}; return r; });
+  if(updated){ state.room = updated; render(); }
+};
+
+window.submitVote = async function(targetId){
+  const updated = await updateRoom(state.roomCode, (r)=>{
+    if(!r) return undefined;
+    r.votes = r.votes || {};
+    r.votes[state.myId] = targetId;
+    return r;
+  });
+  if(updated){ state.room = updated; render(); }
+};
+
+window.closeVoteAndShowResults = function(){ state.showHostPanel = true; render(); };
+
+window.confirmVoteResults = async function(){
+  const checked = Array.from(document.querySelectorAll('.vote-elim-check:checked')).map(el=>el.value);
+  const updated = await updateRoom(state.roomCode, (r)=>{
+    if(!r) return undefined;
+    r.players = (r.players||[]).map(p=> checked.includes(p.id) ? {...p, alive:false} : p);
+    const names = checked.map(id=>{
+      const p=(r.players||[]).find(pp=>pp.id===id); if(!p) return '';
+      const role = roleById(r, p.roleId);
+      return p.nickname + (role? ' ('+role.name+')' : '');
+    }).filter(Boolean);
+    const text = names.length ? (names.join(', ') + ' — 투표로 처형되었습니다.') : '투표 결과, 아무도 처형되지 않았습니다.';
+    r.log = [{text}, ...(r.log||[])];
+    r.phase = 'results';
+    return r;
+  });
+  if(updated){ state.room = updated; state.showHostPanel=false; render(); }
+};
+
+window.nextNight = async function(){
+  const updated = await updateRoom(state.roomCode, (r)=>{
+    if(!r) return undefined;
+    r.phase = 'night'; r.dayNumber = (r.dayNumber||1)+1; r.votes = {}; r.nightSubmissions = {};
+    return r;
+  });
+  if(updated){ state.room = updated; render(); }
+};
+
+window.declareEnd = async function(){
+  const txt = document.getElementById('end-text');
+  const winnerText = txt ? txt.value.trim() : '';
+  const updated = await updateRoom(state.roomCode, (r)=>{
+    if(!r) return undefined;
+    r.phase = 'ended'; r.winnerText = winnerText || '게임이 종료되었습니다.';
+    return r;
+  });
+  if(updated){ state.room = updated; render(); }
+};
+
+window.resetToLobby = async function(){
+  const updated = await updateRoom(state.roomCode, (r)=>{
+    if(!r) return undefined;
+    r.phase = 'lobby';
+    r.players = (r.players||[]).map(p=>({...p, roleId:null, alive:true}));
+    r.nightSubmissions = {}; r.votes = {}; r.log = []; r.winnerText='';
+    return r;
+  });
+  if(updated){ state.room = updated; render(); }
+};
+
+// ---------- render ----------
+function render(){
+  applyTheme();
+  const app = document.getElementById('app');
+  const active = document.activeElement;
+  const isTextInput = active && (active.tagName==='INPUT'||active.tagName==='TEXTAREA') && active.id;
+  const preserve = isTextInput ? {id: active.id, val: active.value, sel: active.selectionStart} : null;
+
+  if(state.screen === 'home') renderHome(app);
+  else if(state.screen === 'createName') renderCreateName(app);
+  else if(state.screen === 'joinForm') renderJoinForm(app);
+  else if(state.screen === 'roleSetup') renderRoleSetup(app);
+  else if(state.screen === 'room') renderRoom(app);
+
+  if(preserve){
+    const el = document.getElementById(preserve.id);
+    if(el && (el.tagName==='INPUT'||el.tagName==='TEXTAREA')){
+      el.value = preserve.val;
+      el.focus();
+      if(preserve.sel != null && el.setSelectionRange){ try{ el.setSelectionRange(preserve.sel, preserve.sel); }catch(e){} }
+    }
+  }
+}
+
+function renderHome(app){
+  app.innerHTML = `
+    <div class="brand" style="margin-bottom:28px;">${esc(TAGLINE)}</div>
+    <div class="stack">
+      <button class="btn-primary btn-block" data-action="goCreate">방 만들기 (진행자)</button>
+      <button class="btn-secondary btn-block" data-action="goJoin">참가하기</button>
+    </div>
+    <div class="notice" style="margin-top:18px;">게임이 밤으로 넘어가면 화면이 자동으로 어두워지고, 낮이 되면 다시 밝아집니다.</div>
+  `;
+}
+
+function renderCreateName(app){
+  app.innerHTML = `
+    <button class="link-btn" data-action="goHome">← 뒤로</button>
+    <h2 style="margin-top:10px;">진행자 닉네임</h2>
+    <div class="sub">방을 만들고 역할을 직접 설계할 수 있어요.</div>
+    <div class="card stack">
+      <div><label>닉네임</label><input id="inp-nick" maxlength="12" placeholder="예: 성좌"></div>
+      ${state.err? `<div class="muted" style="color:var(--mafia);">${esc(state.err)}</div>` : ''}
+      <button class="btn-primary btn-block" data-action="submitCreate">방 만들기</button>
+    </div>
+  `;
+}
+
+function renderJoinForm(app){
+  app.innerHTML = `
+    <button class="link-btn" data-action="goHome">← 뒤로</button>
+    <h2 style="margin-top:10px;">참가하기</h2>
+    <div class="sub">진행자에게 받은 4자리 코드를 입력하세요.</div>
+    <div class="card stack">
+      <div><label>닉네임</label><input id="inp-join-nick" maxlength="12" placeholder="예: 헌터"></div>
+      <div><label>참가 코드</label><input id="inp-join-code" maxlength="4" placeholder="예: 7F3Q" style="text-transform:uppercase;"></div>
+      ${state.err? `<div class="muted" style="color:var(--mafia);">${esc(state.err)}</div>` : ''}
+      <button class="btn-primary btn-block" data-action="submitJoin">참가하기</button>
+    </div>
+  `;
+}
+
+function renderRoleSetup(app){
+  const roles = (state.room && state.room.roles) || [];
+  const totalSlots = roles.reduce((s,r)=>s+r.count,0);
+  const roleOrder = ['role-mafia','role-doctor','role-police','role-citizen'];
+  const ordered = roleOrder.map(id=>roles.find(r=>r.id===id)).filter(Boolean);
+  app.innerHTML = `
+    <h2>역할 설계</h2>
+    <div class="sub">마피아 / 의사 / 경찰 / 시민 네 가지 직업은 기본으로 정해져 있어요. 인원 수만 조절해주세요. 참가자 수보다 역할 합이 적으면 나머지는 자동으로 '시민'이 됩니다.</div>
+    <div class="faint" style="text-align:center;margin-bottom:4px;">${esc(TAGLINE)}</div>
+    <div class="card"><div class="code-display">${state.roomCode}</div><div class="muted" style="text-align:center;">참가 코드 — 이 코드로 친구들을 초대하세요</div></div>
+    <div class="stack">
+      ${ordered.map(r=>`
+        <div class="card card-alt row-between">
+          <div>
+            <div class="row" style="margin-bottom:4px;">
+              <span class="badge ${teamBadgeClass(r.team)}">${teamLabel(r.team)}</span>
+              <strong>${esc(r.name)}</strong>
+            </div>
+            ${r.ability? `<div class="muted">${esc(r.ability)}</div>` : `<div class="faint">특별 능력 없음</div>`}
+          </div>
+          <div style="width:76px;">
+            <label>인원</label>
+            <input type="number" min="0" value="${r.count}" data-count-role="${r.id}">
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    <div class="divider"></div>
+    <div class="muted" style="margin-bottom:10px;">총 역할 슬롯: ${totalSlots}개</div>
+    <button class="btn-primary btn-block" data-action="goLobby">대기실로 이동</button>
+  `;
+}
+
+function renderRoom(app){
+  const room = state.room;
+  if(!room){ app.innerHTML = '불러오는 중…'; return; }
+  if(room.phase === 'setup' || room.phase === 'lobby'){ return renderLobby(app); }
+  return renderGame(app);
+}
+
+function renderLobby(app){
+  const room = state.room;
+  const players = room.players || [];
+  app.innerHTML = `
+    <div class="faint" style="text-align:center;margin-bottom:4px;">${esc(TAGLINE)}</div>
+    <div class="card"><div class="code-display">${state.roomCode}</div><div class="muted" style="text-align:center;">참가 코드 — 아직 시작 전이에요</div></div>
+    <h3>참가자 (${players.length}명)</h3>
+    <div class="card">${players.map(p=>`<div class="player-row"><span>${esc(p.nickname)} ${p.isHost? '<span class="faint">(진행자)</span>':''}</span></div>`).join('')}</div>
+    ${isHost() ? `
+      <button class="btn-secondary btn-block" style="margin-bottom:10px;" data-action="goRoleEditFromLobby">역할 다시 설정</button>
+      <button class="btn-primary btn-block" ${(!room.roles || room.roles.length===0)?'disabled':''} data-action="startGame">게임 시작</button>
+      ${(!room.roles || room.roles.length===0) ? '<div class="faint" style="margin-top:8px;">역할을 최소 1개 이상 추가해야 시작할 수 있어요.</div>' : ''}
+    ` : `<div class="muted">진행자가 게임을 시작하길 기다리는 중…</div>`}
+  `;
+}
+
+function renderGame(app){
+  const room = state.room;
+  const myPlayer = me();
+  const myRole = myPlayer ? roleById(room, myPlayer.roleId) : null;
+  const phaseLabelMap = {night:'밤', day:'낮 · 토론', vote:'투표', results:'결과', ended:'종료'};
+  let body = '';
+  if(myRole && room.phase !== 'ended'){
+    body += `
+      <div class="role-reveal">
+        <span class="badge ${teamBadgeClass(myRole.team)}">${teamLabel(myRole.team)}</span>
+        <div class="name">${esc(myRole.name)}</div>
+        ${myRole.ability? `<div class="muted">${esc(myRole.ability)}</div>` : `<div class="faint">특별한 밤 능력이 없어요</div>`}
+        ${!myPlayer.alive ? '<div style="color:var(--mafia);font-weight:700;margin-top:6px;">탈락함</div>' : ''}
+      </div>
+    `;
+  }
+  if(room.phase === 'night') body += renderNightPhase(room, myPlayer, myRole);
+  else if(room.phase === 'day') body += renderDayPhase(room);
+  else if(room.phase === 'vote') body += renderVotePhase(room, myPlayer);
+  else if(room.phase === 'results') body += renderResultsPhase(room);
+  else if(room.phase === 'ended') body += renderEndedPhase(room);
+  body += renderPlayerList(room);
+  app.innerHTML = `
+    <div class="topbar">
+      <div><div class="faint">${state.roomCode} · ${esc(state.myNickname)}</div><div class="meta">Day ${room.dayNumber||1}</div></div>
+      <div class="phase-tag">${phaseLabelMap[room.phase]||room.phase}</div>
+    </div>
+    ${body}
+  `;
+}
+
+function renderNightPhase(room, myPlayer, myRole){
+  const canTargetSelf = myRole && myRole.id === 'role-doctor';
+  const others = alivePlayers(!canTargetSelf);
+  let html = '';
+  if(myPlayer && myPlayer.alive && myRole && myRole.ability){
+    const already = room.nightSubmissions && room.nightSubmissions[state.myId];
+    html += `
+      <div class="card">
+        <h3>밤의 행동</h3>
+        <div class="muted" style="margin-bottom:10px;">${esc(myRole.ability)}</div>
+        <label>대상 선택</label>
+        <select id="night-target">${others.map(p=>`<option value="${p.id}" ${already && already.targetId===p.id?'selected':''}>${esc(p.nickname)}${p.id===state.myId?' (나)':''}</option>`).join('') || '<option value="">대상 없음</option>'}</select>
+        <label style="margin-top:8px;">메모 (선택)</label>
+        <textarea id="night-note" placeholder="진행자에게 남길 메모">${already? esc(already.note||''):''}</textarea>
+        <button class="btn-primary btn-block" style="margin-top:10px;" data-action="submitNightAction">${already?'행동 다시 제출':'행동 제출'}</button>
+        ${already? '<div class="faint" style="margin-top:6px;">제출 완료 — 다시 제출하면 덮어써요.</div>' : ''}
+      </div>
+    `;
+  } else if(myPlayer && myPlayer.alive){
+    html += `<div class="card"><div class="muted">밤이 되었습니다. 눈을 감고 기다려주세요…</div></div>`;
+  }
+  if(isHost()){
+    html += `<button class="btn-secondary btn-block" style="margin-bottom:10px;" data-action="toggleHostPanel">${state.showHostPanel?'진행자 패널 닫기':'진행자 패널 열기'}</button>`;
+    if(state.showHostPanel){
+      const subs = room.nightSubmissions || {};
+      const rows = Object.keys(subs).map(pid=>{
+        const p = (room.players||[]).find(pp=>pp.id===pid);
+        const targetP = (room.players||[]).find(pp=>pp.id===subs[pid].targetId);
+        if(!p) return '';
+        return `<div class="log-item">${esc(p.nickname)} → ${targetP? esc(targetP.nickname):'?'}${subs[pid].note? ' · '+esc(subs[pid].note):''}</div>`;
+      }).join('') || '<div class="faint">아직 제출된 행동이 없어요.</div>';
+      html += `
+        <div class="card card-alt">
+          <h3>제출된 밤 행동</h3>${rows}<div class="divider"></div>
+          <div class="muted" style="margin-bottom:8px;">탈락 처리할 대상 선택</div>
+          ${alivePlayers(false).map(p=>`<label class="row" style="margin-bottom:6px;"><input type="checkbox" class="night-elim-check" value="${p.id}" style="width:auto;"><span>${esc(p.nickname)}</span></label>`).join('')}
+          <label style="margin-top:6px;">낮에 알릴 메시지 (선택)</label>
+          <textarea id="host-day-note" placeholder="예: 새벽에 비명 소리가 들렸습니다"></textarea>
+          <button class="btn-primary btn-block" style="margin-top:10px;" data-action="eliminateAndGoDay">낮으로 전환</button>
+        </div>
+      `;
+    }
+  }
+  return html;
+}
+
+function renderDayPhase(room){
+  let html = `<div class="card"><h3>진행 기록</h3>${renderLog(room)}</div>`;
+  html += renderChatBox(room);
+  if(isHost()) html += `<button class="btn-primary btn-block" data-action="startVote">투표 시작</button>`;
+  else html += `<div class="muted">토론 중… 진행자가 투표를 시작하길 기다려주세요.</div>`;
+  return html;
+}
+
+function renderChatBox(room){
+  const chat = room.chat || [];
+  const messages = chat.length
+    ? chat.map(m=>`<div class="log-item"><strong>${esc(m.nickname)}</strong> · ${esc(m.text)}</div>`).join('')
+    : '<div class="faint">아직 대화가 없어요. 자유롭게 토론해보세요.</div>';
+  return `
+    <div class="card">
+      <h3>낮 토론</h3>
+      <div style="max-height:220px;overflow-y:auto;margin-bottom:10px;">${messages}</div>
+      <div class="row">
+        <input id="chat-input" placeholder="메시지 입력" data-enter-action="sendChatMessage" style="flex:1;">
+        <button class="btn-secondary" data-action="sendChatMessage" style="white-space:nowrap;">전송</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderVotePhase(room, myPlayer){
+  const candidates = alivePlayers(false);
+  const votes = room.votes || {};
+  const myVote = votes[state.myId];
+  const tally = {};
+  Object.values(votes).forEach(t=>{ tally[t]=(tally[t]||0)+1; });
+  const maxVotes = Math.max(1, ...Object.values(tally));
+  let html = '';
+  if(myPlayer && myPlayer.alive){
+    html += `
+      <div class="card"><h3>투표하기</h3><div class="stack">
+        ${candidates.filter(p=>p.id!==state.myId).map(p=>`<button class="${myVote===p.id?'btn-primary':'btn-secondary'} btn-block" data-action="submitVote" data-arg="${p.id}">${esc(p.nickname)}</button>`).join('')}
+      </div></div>
+    `;
+  }
+  html += `
+    <div class="card card-alt"><h3>실시간 투표 현황</h3>
+      ${candidates.map(p=>{ const c = tally[p.id]||0; return `<div style="margin-bottom:8px;"><div class="row-between"><span>${esc(p.nickname)}</span><span class="faint">${c}표</span></div><div class="tally-bar"><div class="tally-fill" style="width:${(c/maxVotes*100)}%;"></div></div></div>`; }).join('')}
+    </div>
+  `;
+  if(isHost()){
+    if(!state.showHostPanel){ html += `<button class="btn-primary btn-block" data-action="closeVoteAndShowResults">투표 마감</button>`; }
+    else {
+      html += `
+        <div class="card"><h3>처형 대상 확정</h3><div class="muted" style="margin-bottom:8px;">위 현황을 참고해 처형할 인원을 선택하세요 (선택 안 하면 무처형).</div>
+        ${candidates.map(p=>`<label class="row" style="margin-bottom:6px;"><input type="checkbox" class="vote-elim-check" value="${p.id}" style="width:auto;"><span>${esc(p.nickname)} <span class="faint">(${tally[p.id]||0}표)</span></span></label>`).join('')}
+        <button class="btn-danger btn-block" style="margin-top:10px;" data-action="confirmVoteResults">결과 확정</button></div>
+      `;
+    }
+  }
+  return html;
+}
+
+function renderResultsPhase(room){
+  let html = `<div class="card"><h3>진행 기록</h3>${renderLog(room)}</div>`;
+  if(isHost()){
+    html += `
+      <button class="btn-primary btn-block" style="margin-bottom:10px;" data-action="nextNight">다음 밤으로</button>
+      <div class="card"><label>게임 종료 메시지</label><textarea id="end-text" placeholder="예: 시민팀 승리! 마지막 남은 마피아를 찾아냈습니다."></textarea>
+      <button class="btn-danger btn-block" style="margin-top:10px;" data-action="declareEnd">게임 종료 선언</button></div>
+    `;
+  } else { html += `<div class="muted">진행자가 다음 단계를 진행하길 기다려주세요.</div>`; }
+  return html;
+}
+
+function renderEndedPhase(room){
+  const reveal = (room.players||[]).map(p=>{
+    const r = roleById(room, p.roleId);
+    return `<div class="log-item">${esc(p.nickname)} — ${r? esc(r.name):'?'} ${r? '<span class="badge '+teamBadgeClass(r.team)+'" style="margin-left:6px;">'+teamLabel(r.team)+'</span>':''}</div>`;
+  }).join('');
+  let html = `
+    <div class="card"><h3>게임 종료</h3><div class="muted">${esc(room.winnerText||'')}</div></div>
+    <div class="card card-alt"><h3>전체 역할 공개</h3>${reveal}</div>
+  `;
+  if(isHost()) html += `<button class="btn-secondary btn-block" data-action="resetToLobby">대기실로 돌아가서 새 게임 준비</button>`;
+  return html;
+}
+
+function renderLog(room){
+  const log = room.log || [];
+  if(!log.length) return '<div class="faint">아직 기록이 없어요.</div>';
+  return log.map(l=>`<div class="log-item">${esc(l.text)}</div>`).join('');
+}
+
+function renderPlayerList(room){
+  const players = room.players || [];
+  return `
+    <div class="divider"></div><h3>참가자 (${players.length}명)</h3>
+    <div class="card">${players.map(p=>`<div class="player-row ${!p.alive?'dead':''}"><span>${esc(p.nickname)}</span>${!p.alive?'<span class="faint">탈락</span>':''}</div>`).join('')}</div>
+  `;
+}
+
+function bindClicks(){
+  const app = document.getElementById('app');
+  app.addEventListener('click', function(e){
+    const el = e.target.closest('[data-action]');
+    if(!el) return;
+    const action = el.getAttribute('data-action');
+    const arg = el.getAttribute('data-arg');
+    const fn = window[action];
+    if(typeof fn === 'function'){
+      if(arg !== null) fn(arg); else fn();
+    }
+  });
+}
+function bindChanges(){
+  const app = document.getElementById('app');
+  app.addEventListener('change', function(e){
+    const el = e.target.closest('[data-count-role]');
+    if(!el) return;
+    window.updateRoleCount(el.getAttribute('data-count-role'), el.value);
+  });
+}
+function bindKeydown(){
+  const app = document.getElementById('app');
+  app.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter') return;
+    const el = e.target.closest('[data-enter-action]');
+    if(!el) return;
+    e.preventDefault();
+    const fn = window[el.getAttribute('data-enter-action')];
+    if(typeof fn === 'function') fn();
+  });
+}
+
+bindClicks();
+bindChanges();
+bindKeydown();
+render();
+})();
+</script>
+</body>
+</html>
