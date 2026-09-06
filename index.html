@@ -194,7 +194,7 @@ function isHost(){ return state.room && state.room.hostId === state.myId; }
 function me(){ return state.room && (state.room.players||[]).find(p=>p.id===state.myId); }
 function alivePlayers(excludeSelf){
   if(!state.room) return [];
-  return (state.room.players||[]).filter(p=>p.alive && (!excludeSelf || p.id!==state.myId));
+  return (state.room.players||[]).filter(p=> p.alive && !p.isHost && (!excludeSelf || p.id!==state.myId));
 }
 function applyTheme(){
   const phase = state.room ? state.room.phase : null;
@@ -279,13 +279,19 @@ window.startGame = async function(){
   const updated = await updateRoom(state.roomCode, (r)=>{
     if(!r) return undefined;
     const players = r.players || [];
+    const gamePlayers = players.filter(p=>!p.isHost);
     let pool = [];
     (r.roles||[]).forEach(role=>{ for(let i=0;i<role.count;i++) pool.push(role.id); });
     pool = shuffle(pool);
-    if(pool.length < players.length){ while(pool.length < players.length) pool.push(DEFAULT_CITIZEN_ID); }
-    else if(pool.length > players.length){ pool = pool.slice(0, players.length); }
+    if(pool.length < gamePlayers.length){ while(pool.length < gamePlayers.length) pool.push(DEFAULT_CITIZEN_ID); }
+    else if(pool.length > gamePlayers.length){ pool = pool.slice(0, gamePlayers.length); }
     const shuffledPool = shuffle(pool);
-    r.players = players.map((p,i)=>({...p, roleId: shuffledPool[i], alive:true}));
+    let gi = 0;
+    r.players = players.map(p=>{
+      if(p.isHost) return {...p, roleId:null, alive:true};
+      const roleId = shuffledPool[gi]; gi++;
+      return {...p, roleId, alive:true};
+    });
     r.phase = 'night'; r.dayNumber = 1; r.nightSubmissions = {}; r.votes = {};
     r.log = [{text:'게임이 시작되었습니다. 첫 번째 밤이 찾아옵니다.'}];
     return r;
@@ -326,6 +332,8 @@ window.eliminateAndGoDay = async function(){
 };
 
 window.sendChatMessage = async function(){
+  const myPlayer = me();
+  if(myPlayer && !myPlayer.alive) return;
   const el = document.getElementById('chat-input');
   const text = el ? el.value.trim() : '';
   if(!text) return;
@@ -540,14 +548,14 @@ function renderGame(app){
     `;
   }
   if(room.phase === 'night') body += renderNightPhase(room, myPlayer, myRole);
-  else if(room.phase === 'day') body += renderDayPhase(room);
+  else if(room.phase === 'day') body += renderDayPhase(room, myPlayer);
   else if(room.phase === 'vote') body += renderVotePhase(room, myPlayer);
   else if(room.phase === 'results') body += renderResultsPhase(room);
   else if(room.phase === 'ended') body += renderEndedPhase(room);
   body += renderPlayerList(room);
   app.innerHTML = `
     <div class="topbar">
-      <div><div class="faint">${state.roomCode} · ${esc(state.myNickname)}</div><div class="meta">Day ${room.dayNumber||1}</div></div>
+      <div><div class="faint">${state.roomCode} · ${esc(state.myNickname)}${isHost()?' (진행자)':''}</div><div class="meta">Day ${room.dayNumber||1}</div></div>
       <div class="phase-tag">${phaseLabelMap[room.phase]||room.phase}</div>
     </div>
     ${body}
@@ -558,7 +566,7 @@ function renderNightPhase(room, myPlayer, myRole){
   const canTargetSelf = myRole && myRole.id === 'role-doctor';
   const others = alivePlayers(!canTargetSelf);
   let html = '';
-  if(myPlayer && myPlayer.alive && myRole && myRole.ability){
+  if(!isHost() && myPlayer && myPlayer.alive && myRole && myRole.ability){
     const already = room.nightSubmissions && room.nightSubmissions[state.myId];
     html += `
       <div class="card">
@@ -566,13 +574,13 @@ function renderNightPhase(room, myPlayer, myRole){
         <div class="muted" style="margin-bottom:10px;">${esc(myRole.ability)}</div>
         <label>대상 선택</label>
         <select id="night-target">${others.map(p=>`<option value="${p.id}" ${already && already.targetId===p.id?'selected':''}>${esc(p.nickname)}${p.id===state.myId?' (나)':''}</option>`).join('') || '<option value="">대상 없음</option>'}</select>
-        <label style="margin-top:8px;">메모 (선택)</label>
-        <textarea id="night-note" placeholder="진행자에게 남길 메모">${already? esc(already.note||''):''}</textarea>
+        <label style="margin-top:8px;">메모 (선택) — 예: 경찰, 헌터1 조사합니다.</label>
+        <textarea id="night-note" placeholder="예: 경찰, 헌터1 조사합니다.">${already? esc(already.note||''):''}</textarea>
         <button class="btn-primary btn-block" style="margin-top:10px;" data-action="submitNightAction">${already?'행동 다시 제출':'행동 제출'}</button>
         ${already? '<div class="faint" style="margin-top:6px;">제출 완료 — 다시 제출하면 덮어써요.</div>' : ''}
       </div>
     `;
-  } else if(myPlayer && myPlayer.alive){
+  } else if(!isHost() && myPlayer && myPlayer.alive){
     html += `<div class="card"><div class="muted">밤이 되었습니다. 눈을 감고 기다려주세요…</div></div>`;
   }
   if(isHost()){
@@ -600,27 +608,31 @@ function renderNightPhase(room, myPlayer, myRole){
   return html;
 }
 
-function renderDayPhase(room){
+function renderDayPhase(room, myPlayer){
   let html = `<div class="card"><h3>진행 기록</h3>${renderLog(room)}</div>`;
-  html += renderChatBox(room);
+  const canChat = !myPlayer || myPlayer.alive; // 진행자(myPlayer 없음)나 생존자는 채팅 가능
+  html += renderChatBox(room, canChat);
   if(isHost()) html += `<button class="btn-primary btn-block" data-action="startVote">투표 시작</button>`;
   else html += `<div class="muted">토론 중… 진행자가 투표를 시작하길 기다려주세요.</div>`;
   return html;
 }
 
-function renderChatBox(room){
+function renderChatBox(room, canChat){
   const chat = room.chat || [];
   const messages = chat.length
     ? chat.map(m=>`<div class="log-item"><strong>${esc(m.nickname)}</strong> · ${esc(m.text)}</div>`).join('')
     : '<div class="faint">아직 대화가 없어요. 자유롭게 토론해보세요.</div>';
-  return `
-    <div class="card">
-      <h3>낮 토론</h3>
-      <div style="max-height:220px;overflow-y:auto;margin-bottom:10px;">${messages}</div>
+  const inputArea = canChat ? `
       <div class="row">
         <input id="chat-input" placeholder="메시지 입력" data-enter-action="sendChatMessage" style="flex:1;">
         <button class="btn-secondary" data-action="sendChatMessage" style="white-space:nowrap;">전송</button>
       </div>
+  ` : `<div class="faint">탈락한 참가자는 토론에 참여할 수 없습니다.</div>`;
+  return `
+    <div class="card">
+      <h3>낮 토론</h3>
+      <div style="max-height:220px;overflow-y:auto;margin-bottom:10px;">${messages}</div>
+      ${inputArea}
     </div>
   `;
 }
@@ -633,7 +645,7 @@ function renderVotePhase(room, myPlayer){
   Object.values(votes).forEach(t=>{ tally[t]=(tally[t]||0)+1; });
   const maxVotes = Math.max(1, ...Object.values(tally));
   let html = '';
-  if(myPlayer && myPlayer.alive){
+  if(!isHost() && myPlayer && myPlayer.alive){
     html += `
       <div class="card"><h3>투표하기</h3><div class="stack">
         ${candidates.filter(p=>p.id!==state.myId).map(p=>`<button class="${myVote===p.id?'btn-primary':'btn-secondary'} btn-block" data-action="submitVote" data-arg="${p.id}">${esc(p.nickname)}</button>`).join('')}
@@ -693,7 +705,7 @@ function renderPlayerList(room){
   const players = room.players || [];
   return `
     <div class="divider"></div><h3>참가자 (${players.length}명)</h3>
-    <div class="card">${players.map(p=>`<div class="player-row ${!p.alive?'dead':''}"><span>${esc(p.nickname)}</span>${!p.alive?'<span class="faint">탈락</span>':''}</div>`).join('')}</div>
+    <div class="card">${players.map(p=>`<div class="player-row ${!p.alive?'dead':''}"><span>${esc(p.nickname)}${p.isHost?' <span class="faint">(진행자)</span>':''}</span>${!p.alive?'<span class="faint">탈락</span>':''}</div>`).join('')}</div>
   `;
 }
 
