@@ -72,7 +72,8 @@
   .phase-tag{font-family:'Chivo',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.05em;padding:5px 12px;border-radius:8px;background:var(--accent);color:var(--accent-text);}
   .player-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);}
   .player-row:last-child{border-bottom:none;}
-  .dead{opacity:0.4;text-decoration:line-through;}
+  .dead{opacity:0.55;}
+  .dead-nickname{text-decoration:line-through;}
   .log-item{font-size:13.5px;color:var(--text-dim);padding:6px 0;border-bottom:1px dashed var(--line);}
   .log-item:last-child{border-bottom:none;}
   .role-reveal{background:var(--bg-elev);border:1px solid var(--accent);border-radius:12px;padding:16px;text-align:center;margin-bottom:14px;}
@@ -325,7 +326,7 @@ window.eliminateAndGoDay = async function(){
     let text = names.length ? (names.join(', ') + '님이 밤사이 목숨을 잃었습니다.') : '밤사이 아무도 목숨을 잃지 않았습니다.';
     if(note) text += ' — ' + note;
     r.log = [{text}, ...(r.log||[])];
-    r.phase = 'day'; r.nightSubmissions = {}; r.chat = [];
+    r.phase = 'day'; r.nightSubmissions = {}; r.chat = []; r.deadChat = [];
     return r;
   });
   if(updated){ state.room = updated; state.showHostPanel=false; render(); }
@@ -342,6 +343,23 @@ window.sendChatMessage = async function(){
     r.chat = r.chat || [];
     r.chat.push({nickname: state.myNickname, text, ts: Date.now(), isHost: isHost()});
     if(r.chat.length > 200) r.chat = r.chat.slice(-200);
+    return r;
+  });
+  if(updated){ state.room = updated; render(); }
+};
+
+window.sendDeadChatMessage = async function(){
+  const myPlayer = me();
+  const canSend = isHost() || (myPlayer && !myPlayer.alive);
+  if(!canSend) return;
+  const el = document.getElementById('deadchat-input');
+  const text = el ? el.value.trim() : '';
+  if(!text) return;
+  const updated = await updateRoom(state.roomCode, (r)=>{
+    if(!r) return undefined;
+    r.deadChat = r.deadChat || [];
+    r.deadChat.push({nickname: state.myNickname, text, ts: Date.now(), isHost: isHost()});
+    if(r.deadChat.length > 200) r.deadChat = r.deadChat.slice(-200);
     return r;
   });
   if(updated){ state.room = updated; render(); }
@@ -562,6 +580,18 @@ function renderGame(app){
   `;
 }
 
+function renderHostRoleList(room){
+  const nonHostPlayers = (room.players||[]).filter(p=>!p.isHost);
+  const rows = nonHostPlayers.map(p=>{
+    const role = roleById(room, p.roleId);
+    const roleLabel = role
+      ? `${esc(role.name)} <span class="badge ${teamBadgeClass(role.team)}" style="margin-left:6px;">${teamLabel(role.team)}</span>`
+      : '<span class="faint">미배정</span>';
+    return `<div class="log-item"><span class="${!p.alive?'dead-nickname':''}">${esc(p.nickname)}</span> — ${roleLabel}${!p.alive?' <span class="faint">(탈락)</span>':''}</div>`;
+  }).join('') || '<div class="faint">참가자가 없습니다.</div>';
+  return `<div class="card card-alt"><h3>참가자 역할</h3>${rows}</div>`;
+}
+
 function renderNightPhase(room, myPlayer, myRole){
   const canTargetSelf = myRole && myRole.id === 'role-doctor';
   const others = alivePlayers(!canTargetSelf);
@@ -575,7 +605,7 @@ function renderNightPhase(room, myPlayer, myRole){
         <label>대상 선택</label>
         <select id="night-target">${others.map(p=>`<option value="${p.id}" ${already && already.targetId===p.id?'selected':''}>${esc(p.nickname)}${p.id===state.myId?' (나)':''}</option>`).join('') || '<option value="">대상 없음</option>'}</select>
         <label style="margin-top:8px;">행동 게시</label>
-        <textarea id="night-note" placeholder="예: 경찰, 헌터1 조사합니다.">${already? esc(already.note||''):''}</textarea>
+        <textarea id="night-note" placeholder="예: 헌터A 조사합니다.">${already? esc(already.note||''):''}</textarea>
         <button class="btn-primary btn-block" style="margin-top:10px;" data-action="submitNightAction">${already?'행동 다시 제출':'행동 제출'}</button>
         ${already? '<div class="faint" style="margin-top:6px;">제출 완료 — 다시 제출하면 덮어써요.</div>' : ''}
       </div>
@@ -586,6 +616,7 @@ function renderNightPhase(room, myPlayer, myRole){
   if(isHost()){
     html += `<button class="btn-secondary btn-block" style="margin-bottom:10px;" data-action="toggleHostPanel">${state.showHostPanel?'진행자 패널 닫기':'진행자 패널 열기'}</button>`;
     if(state.showHostPanel){
+      html += renderHostRoleList(room);
       const subs = room.nightSubmissions || {};
       const rows = Object.keys(subs).map(pid=>{
         const p = (room.players||[]).find(pp=>pp.id===pid);
@@ -595,7 +626,7 @@ function renderNightPhase(room, myPlayer, myRole){
       }).join('') || '<div class="faint">아직 제출된 행동이 없어요.</div>';
       html += `
         <div class="card card-alt">
-          <h3>제출된 밤 행동</h3>${rows}<div class="divider"></div>
+          <h3>제출된 행동</h3>${rows}<div class="divider"></div>
           <div class="muted" style="margin-bottom:8px;">탈락 처리할 대상 선택</div>
           ${alivePlayers(false).map(p=>`<label class="row" style="margin-bottom:6px;"><input type="checkbox" class="night-elim-check" value="${p.id}" style="width:auto;"><span>${esc(p.nickname)}</span></label>`).join('')}
           <label style="margin-top:6px;">낮에 알릴 메시지 (선택)</label>
@@ -610,8 +641,12 @@ function renderNightPhase(room, myPlayer, myRole){
 
 function renderDayPhase(room, myPlayer){
   let html = `<div class="card"><h3>진행 기록</h3>${renderLog(room)}</div>`;
-  const canChat = !myPlayer || myPlayer.alive; // 진행자(myPlayer 없음)나 생존자는 채팅 가능
+  const isDeadPlayer = myPlayer && !myPlayer.alive;
+  const canChat = !myPlayer || myPlayer.alive; // 진행자(myPlayer 없음)나 생존자는 공개 채팅 가능
   html += renderChatBox(room, canChat);
+  if(isDeadPlayer || isHost()){
+    html += renderDeadChatBox(room);
+  }
   if(isHost()) html += `<button class="btn-primary btn-block" data-action="startVote">투표 시작</button>`;
   else html += `<div class="muted">토론 중… 진행자가 투표를 시작하길 기다려주세요.</div>`;
   return html;
@@ -627,12 +662,30 @@ function renderChatBox(room, canChat){
         <input id="chat-input" placeholder="메시지 입력" data-enter-action="sendChatMessage" style="flex:1;">
         <button class="btn-secondary" data-action="sendChatMessage" style="white-space:nowrap;">전송</button>
       </div>
-  ` : `<div class="faint">탈락한 참가자는 토론에 참여할 수 없습니다.</div>`;
+  ` : `<div class="faint">탈락한 참가자는 아래 '탈락자 전용 채팅'을 이용해주세요.</div>`;
   return `
     <div class="card">
       <h3>낮 토론</h3>
       <div style="max-height:220px;overflow-y:auto;margin-bottom:10px;">${messages}</div>
       ${inputArea}
+    </div>
+  `;
+}
+
+function renderDeadChatBox(room){
+  const chat = room.deadChat || [];
+  const messages = chat.length
+    ? chat.map(m=>`<div class="log-item"><strong>${esc(m.nickname)}</strong>${m.isHost?' <span class="faint">(진행자)</span>':''} · ${esc(m.text)}</div>`).join('')
+    : '<div class="faint">아직 대화가 없어요.</div>';
+  return `
+    <div class="card card-alt">
+      <h3>탈락자 전용 채팅</h3>
+      <div class="faint" style="margin-bottom:8px;">이 대화는 탈락한 참가자끼리만 볼 수 있어요.</div>
+      <div style="max-height:220px;overflow-y:auto;margin-bottom:10px;">${messages}</div>
+      <div class="row">
+        <input id="deadchat-input" placeholder="메시지 입력" data-enter-action="sendDeadChatMessage" style="flex:1;">
+        <button class="btn-secondary" data-action="sendDeadChatMessage" style="white-space:nowrap;">전송</button>
+      </div>
     </div>
   `;
 }
@@ -660,6 +713,7 @@ function renderVotePhase(room, myPlayer){
   if(isHost()){
     if(!state.showHostPanel){ html += `<button class="btn-primary btn-block" data-action="closeVoteAndShowResults">투표 마감</button>`; }
     else {
+      html += renderHostRoleList(room);
       html += `
         <div class="card"><h3>처형 대상 확정</h3><div class="muted" style="margin-bottom:8px;">위 현황을 참고해 처형할 인원을 선택하세요 (선택 안 하면 무처형).</div>
         ${candidates.map(p=>`<label class="row" style="margin-bottom:6px;"><input type="checkbox" class="vote-elim-check" value="${p.id}" style="width:auto;"><span>${esc(p.nickname)} <span class="faint">(${tally[p.id]||0}표)</span></span></label>`).join('')}
@@ -705,7 +759,7 @@ function renderPlayerList(room){
   const players = room.players || [];
   return `
     <div class="divider"></div><h3>참가자 (${players.length}명)</h3>
-    <div class="card">${players.map(p=>`<div class="player-row ${!p.alive?'dead':''}"><span>${esc(p.nickname)}${p.isHost?' <span class="faint">(진행자)</span>':''}${p.id===state.myId?' <span class="faint">(나)</span>':''}</span>${!p.alive?'<span class="faint">탈락</span>':''}</div>`).join('')}</div>
+    <div class="card">${players.map(p=>`<div class="player-row ${!p.alive?'dead':''}"><span class="${!p.alive?'dead-nickname':''}">${esc(p.nickname)}${p.isHost?' <span class="faint">(진행자)</span>':''}${p.id===state.myId?' <span class="faint">(나)</span>':''}</span>${!p.alive?'<span class="faint">탈락</span>':''}</div>`).join('')}</div>
   `;
 }
 
