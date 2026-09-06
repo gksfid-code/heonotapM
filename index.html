@@ -340,7 +340,7 @@ window.sendChatMessage = async function(){
   const updated = await updateRoom(state.roomCode, (r)=>{
     if(!r) return undefined;
     r.chat = r.chat || [];
-    r.chat.push({nickname: state.myNickname, text, ts: Date.now()});
+    r.chat.push({nickname: state.myNickname, text, ts: Date.now(), isHost: isHost()});
     if(r.chat.length > 200) r.chat = r.chat.slice(-200);
     return r;
   });
@@ -444,7 +444,7 @@ function renderHome(app){
       <button class="btn-primary btn-block" data-action="goCreate">방 만들기 (진행자)</button>
       <button class="btn-secondary btn-block" data-action="goJoin">참가하기</button>
     </div>
-    <div class="notice" style="margin-top:18px;">게임이 밤으로 넘어가면 화면이 자동으로 어두워지고, 낮이 되면 다시 밝아집니다.</div>
+    <div class="notice" style="margin-top:18px;">게임이 밤으로 넘어가면 화면이 자동으로 어두워지고, 낮이 되면 다시 밝아집니다. 새로고침하면 참가 정보가 사라지니 진행 중엔 탭을 닫지 마세요.</div>
   `;
 }
 
@@ -482,9 +482,9 @@ function renderRoleSetup(app){
   const ordered = roleOrder.map(id=>roles.find(r=>r.id===id)).filter(Boolean);
   app.innerHTML = `
     <h2>역할 설계</h2>
-    <div class="sub">마피아 / 의사 / 경찰 / 시민 네 가지 직업은 기본으로 정해져 있어요. 인원 수만 조절해주세요. 참가자 수보다 역할 합이 적으면 나머지는 자동으로 '시민'이 됩니다.</div>
+    <div class="sub">마피아·의사·경찰·시민 네 가지 직업이 기본으로 정해져 있습니다. 인원 수만 조절해주세요. 참가자 수보다 역할 합이 적으면 나머지는 자동으로 '시민'이 됩니다.</div>
     <div class="faint" style="text-align:center;margin-bottom:4px;">${esc(TAGLINE)}</div>
-    <div class="card"><div class="code-display">${state.roomCode}</div><div class="muted" style="text-align:center;">참가 코드 — 이 코드로 친구들을 초대하세요</div></div>
+    <div class="card"><div class="code-display">${state.roomCode}</div><div class="muted" style="text-align:center;">참가 코드 — 해당 코드로 헌터를 초대하세요.</div></div>
     <div class="stack">
       ${ordered.map(r=>`
         <div class="card card-alt row-between">
@@ -493,7 +493,7 @@ function renderRoleSetup(app){
               <span class="badge ${teamBadgeClass(r.team)}">${teamLabel(r.team)}</span>
               <strong>${esc(r.name)}</strong>
             </div>
-            ${r.ability? `<div class="muted">${esc(r.ability)}</div>` : `<div class="faint">특별 능력 없음</div>`}
+            ${r.ability? `<div class="muted">${esc(r.ability)}</div>` : `<div class="faint">능력 없음</div>`}
           </div>
           <div style="width:76px;">
             <label>인원</label>
@@ -520,9 +520,9 @@ function renderLobby(app){
   const players = room.players || [];
   app.innerHTML = `
     <div class="faint" style="text-align:center;margin-bottom:4px;">${esc(TAGLINE)}</div>
-    <div class="card"><div class="code-display">${state.roomCode}</div><div class="muted" style="text-align:center;">참가 코드 — 아직 시작 전이에요</div></div>
+    <div class="card"><div class="code-display">${state.roomCode}</div><div class="muted" style="text-align:center;">참가 코드 — 아직 시작하지 않았습니다</div></div>
     <h3>참가자 (${players.length}명)</h3>
-    <div class="card">${players.map(p=>`<div class="player-row"><span>${esc(p.nickname)} ${p.isHost? '<span class="faint">(진행자)</span>':''}</span></div>`).join('')}</div>
+    <div class="card">${players.map(p=>`<div class="player-row"><span>${esc(p.nickname)} ${p.isHost? '<span class="faint">(진행자)</span>':''}${p.id===state.myId?' <span class="faint">(나)</span>':''}</span></div>`).join('')}</div>
     ${isHost() ? `
       <button class="btn-secondary btn-block" style="margin-bottom:10px;" data-action="goRoleEditFromLobby">역할 다시 설정</button>
       <button class="btn-primary btn-block" ${(!room.roles || room.roles.length===0)?'disabled':''} data-action="startGame">게임 시작</button>
@@ -542,7 +542,7 @@ function renderGame(app){
       <div class="role-reveal">
         <span class="badge ${teamBadgeClass(myRole.team)}">${teamLabel(myRole.team)}</span>
         <div class="name">${esc(myRole.name)}</div>
-        ${myRole.ability? `<div class="muted">${esc(myRole.ability)}</div>` : `<div class="faint">특별한 밤 능력이 없어요</div>`}
+        ${myRole.ability? `<div class="muted">${esc(myRole.ability)}</div>` : `<div class="faint">특별한 능력이 없습니다</div>`}
         ${!myPlayer.alive ? '<div style="color:var(--mafia);font-weight:700;margin-top:6px;">탈락함</div>' : ''}
       </div>
     `;
@@ -574,7 +574,7 @@ function renderNightPhase(room, myPlayer, myRole){
         <div class="muted" style="margin-bottom:10px;">${esc(myRole.ability)}</div>
         <label>대상 선택</label>
         <select id="night-target">${others.map(p=>`<option value="${p.id}" ${already && already.targetId===p.id?'selected':''}>${esc(p.nickname)}${p.id===state.myId?' (나)':''}</option>`).join('') || '<option value="">대상 없음</option>'}</select>
-        <label style="margin-top:8px;">메모 (선택) — 예: 경찰, 헌터1 조사합니다.</label>
+        <label style="margin-top:8px;">행동 게시</label>
         <textarea id="night-note" placeholder="예: 경찰, 헌터1 조사합니다.">${already? esc(already.note||''):''}</textarea>
         <button class="btn-primary btn-block" style="margin-top:10px;" data-action="submitNightAction">${already?'행동 다시 제출':'행동 제출'}</button>
         ${already? '<div class="faint" style="margin-top:6px;">제출 완료 — 다시 제출하면 덮어써요.</div>' : ''}
@@ -620,7 +620,7 @@ function renderDayPhase(room, myPlayer){
 function renderChatBox(room, canChat){
   const chat = room.chat || [];
   const messages = chat.length
-    ? chat.map(m=>`<div class="log-item"><strong>${esc(m.nickname)}</strong> · ${esc(m.text)}</div>`).join('')
+    ? chat.map(m=>`<div class="log-item"><strong>${esc(m.nickname)}</strong>${m.isHost?' <span class="faint">(진행자)</span>':''} · ${esc(m.text)}</div>`).join('')
     : '<div class="faint">아직 대화가 없어요. 자유롭게 토론해보세요.</div>';
   const inputArea = canChat ? `
       <div class="row">
@@ -685,7 +685,7 @@ function renderResultsPhase(room){
 function renderEndedPhase(room){
   const reveal = (room.players||[]).map(p=>{
     const r = roleById(room, p.roleId);
-    return `<div class="log-item">${esc(p.nickname)} — ${r? esc(r.name):'?'} ${r? '<span class="badge '+teamBadgeClass(r.team)+'" style="margin-left:6px;">'+teamLabel(r.team)+'</span>':''}</div>`;
+    return `<div class="log-item">${esc(p.nickname)} — ${r? esc(r.name):(p.isHost?'진행자':'?')} ${r? '<span class="badge '+teamBadgeClass(r.team)+'" style="margin-left:6px;">'+teamLabel(r.team)+'</span>':''}</div>`;
   }).join('');
   let html = `
     <div class="card"><h3>게임 종료</h3><div class="muted">${esc(room.winnerText||'')}</div></div>
@@ -705,7 +705,7 @@ function renderPlayerList(room){
   const players = room.players || [];
   return `
     <div class="divider"></div><h3>참가자 (${players.length}명)</h3>
-    <div class="card">${players.map(p=>`<div class="player-row ${!p.alive?'dead':''}"><span>${esc(p.nickname)}${p.isHost?' <span class="faint">(진행자)</span>':''}</span>${!p.alive?'<span class="faint">탈락</span>':''}</div>`).join('')}</div>
+    <div class="card">${players.map(p=>`<div class="player-row ${!p.alive?'dead':''}"><span>${esc(p.nickname)}${p.isHost?' <span class="faint">(진행자)</span>':''}${p.id===state.myId?' <span class="faint">(나)</span>':''}</span>${!p.alive?'<span class="faint">탈락</span>':''}</div>`).join('')}</div>
   `;
 }
 
